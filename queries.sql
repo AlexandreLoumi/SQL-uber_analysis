@@ -97,21 +97,7 @@ JOIN locations ON trips.pickup_location_id = locations.location_id
 GROUP BY locations.city
 ORDER BY "Nombre de courses" DESC;
 
-
--- Qui sont les 10 chauffeurs ayant rapporté le plus de CA ?
-
-SELECT
-    users.name AS "Chauffeurs",
-    COUNT(*) AS "Nombre de courses",
-    ROUND(SUM(trips.total_fare), 2) AS "Chiffre d'affaires total généré"
-FROM trips
-JOIN drivers ON trips.driver_id = drivers.driver_id
-JOIN users ON drivers.user_id = users.user_id
-GROUP BY users.name
-ORDER BY "Chiffre d'affaires total généré" DESC
-LIMIT 10;
-
-
+-- !!!!!!!!!!!!!!!!! ANALYSER LA QUALITÉ DU MARCHÉ (annulations par ville, notes des chauffeurs par ville...)
 
 --------------------------------
 -- 4. ANALYSE DES ANNULATIONS ET DE LA QUALITÉ DE SERVICE
@@ -148,8 +134,9 @@ JOIN trips ON cancellations.trip_id = trips.trip_id
 GROUP BY cancellations.reason
 ORDER BY "CA potentiel perdu" DESC;
 
+
 --------------------------------
--- 5. ANALYSE DE LA PERFORMANCE CHAUFFEURS
+-- 5. ANALYSE OPÉRATIONNELLE
 --------------------------------
 
 /*
@@ -187,9 +174,6 @@ FROM courses_quartile
 GROUP BY quartile_duree;
 
 
---------------------------------
--- 6. ANALYSE OPÉRATIONNELLE
---------------------------------
 
 /*
 Quels sont les créneaux Jour / Heure les plus demandés ?
@@ -219,4 +203,47 @@ SELECT
 FROM jour_semaine
 GROUP BY "Jour de la semaine", "Heure de la journée"
 ORDER BY "Nombre de courses" DESC
+LIMIT 10;
+
+
+-- Qui sont les 10 chauffeurs ayant rapporté le plus de CA ?
+
+SELECT
+    users.name AS "Chauffeurs",
+    COUNT(*) AS "Nombre de courses",
+    ROUND(SUM(trips.total_fare), 2) AS "Chiffre d'affaires total généré"
+FROM trips
+JOIN drivers ON trips.driver_id = drivers.driver_id
+JOIN users ON drivers.user_id = users.user_id
+GROUP BY users.name
+ORDER BY "Chiffre d'affaires total généré" DESC
+LIMIT 10;
+
+
+-- Quels chauffeurs génèrent le PLUS de CA par unité de temps ?
+
+SELECT
+    users.name AS "Chauffeurs",
+    ROUND((SUM(trips.total_fare) / SUM(trips.duration_mins)) * 60, 2) AS "CA par heure",
+    COUNT(*) AS "Nombre de courses",
+    SUM(trips.total_fare) AS "CA total"
+FROM trips
+JOIN drivers ON trips.driver_id = drivers.driver_id
+JOIN users ON drivers.user_id = users.user_id
+GROUP BY users.name
+ORDER BY "CA par heure" DESC
+LIMIT 10;
+
+-- Quels chauffeurs génèrent le MOINS de CA par unité de temps ?
+
+SELECT
+    users.name AS "Chauffeurs",
+    ROUND((SUM(trips.total_fare) / SUM(trips.duration_mins)) * 60, 2) AS "CA par heure",
+    COUNT(*) AS "Nombre de courses",
+    SUM(trips.total_fare) AS "CA total"
+FROM trips
+JOIN drivers ON trips.driver_id = drivers.driver_id
+JOIN users ON drivers.user_id = users.user_id
+GROUP BY users.name
+ORDER BY "CA par heure" ASC
 LIMIT 10;
