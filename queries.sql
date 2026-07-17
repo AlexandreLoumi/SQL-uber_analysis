@@ -1,5 +1,5 @@
 --------------------------------
--- 1. DATA EXPLORATION
+-- 1. EXPLORATION DES DONNÉES
 --------------------------------
 
 /*
@@ -28,18 +28,12 @@ SELECT * FROM payments LIMIT 10;
 SELECT * FROM reviews LIMIT 10;
 
 --------------------------------
--- 2. KEY BUSINESS METRICS
+-- 2. MÉTRIQUES BUSINESS CLÉS
 --------------------------------
 
 /*
 Analyser les principaux indicateurs de performance de
-l'activité d'Uber à partir de la table de faits (trips).
-
-Les analyses portent notamment sur :
-- le volume de courses
-- la répartition des statuts
-- les revenus générés
-- les performances opérationnelles
+l'activité d'Uber.
 */
 
 
@@ -74,11 +68,12 @@ SELECT ROUND(AVG(duration_mins), 2) AS "Durée moyenne par course"
 FROM trips;
 
 
-SELECT requested_at
-FROM trips;
+--------------------------------
+-- 3. ANALYSE DE LA DEMANDE ET DU MARCHÉ
+--------------------------------
 
 /*
-Analyser l'évolution du volume de courses au fil du temps pour identifier
+Évolution du volume de courses au fil du temps pour identifier
 les tendances saisonnières et les périodes de forte activité.
 */
 
@@ -90,7 +85,7 @@ GROUP BY strftime('%Y-%m', requested_at)
 ORDER BY strftime('%Y-%m', requested_at) ;
 
 /*
-Analyser les villes les plus fréquentées par les utilisateurs
+Analyse des villes les plus fréquentées par les utilisateurs
 pour identifier les zones à fort potentiel de croissance et d'expansion.
 */
 
@@ -117,6 +112,11 @@ ORDER BY "Chiffre d'affaires total généré" DESC
 LIMIT 10;
 
 
+
+--------------------------------
+-- 4. ANALYSE DES ANNULATIONS ET DE LA QUALITÉ DE SERVICE
+--------------------------------
+
 -- Quel est le taux d'annulation des course ?
 
 SELECT
@@ -124,7 +124,9 @@ SELECT
 FROM trips
 LEFT JOIN cancellations ON trips.trip_id = cancellations.trip_id;
 
--- Quelles sont les raisons d'annulation ?
+
+-- Quelles sont les raisons d'annulation principales ?
+
 SELECT
     COUNT(cancel_id) AS "Nombre d'annulations",
     reason AS "Raison de l'annulation",
@@ -132,3 +134,82 @@ SELECT
 FROM cancellations
 GROUP BY reason, cancelled_by
 ORDER BY "Nombre d'annulations" DESC;
+
+
+--------------------------------
+-- 5. ANALYSE DE LA PERFORMANCE CHAUFFEURS
+--------------------------------
+
+/*
+Quelles sont les courses les plus rentables ?
+Par rentable, on entend les courses qui rapportent le plus de CA
+par minutes et par km parcourus.
+Je compare les catégories de trajets selon leur durée et leur distance
+afin d'identifier celles qui génèrent le plus de CA et offrent
+la meilleure rentabilité en temps et en distance.
+*/
+
+WITH courses_quartile AS (
+    SELECT
+        NTILE(4) OVER (ORDER BY duration_mins) AS quartile_duree,
+        duration_mins,
+        distance_km,
+        total_fare
+    FROM trips
+)
+SELECT
+
+    CASE
+        WHEN quartile_duree = 1 THEN "Trajet court"
+        WHEN quartile_duree = 2 THEN "Trajet moyen"
+        WHEN quartile_duree = 3 THEN "Trajet long"
+        ELSE "Trajet très long"
+    END AS "Catégorie durée",
+
+    ROUND(SUM(total_fare) / SUM(duration_mins), 2) AS "CA par minute",
+    ROUND(SUM(total_fare) / SUM(distance_km), 2) AS "CA par km",
+    COUNT(*) AS "Nombre de courses",
+    SUM(total_fare) AS "CA total",
+    AVG(total_fare) AS "CA moyen"
+FROM courses_quartile
+GROUP BY quartile_duree;
+
+
+
+WITH jour_semaine AS (
+    SELECT
+        strftime('%w', requested_at) AS 'Jour',
+        strftime('%H', requested_at) AS 'Heure de la journée',
+        trip_id
+    FROM trips
+)
+SELECT
+    CASE
+        WHEN Jour = '0' THEN 'Dimanche'
+        WHEN Jour = '1' THEN 'Lundi'
+        WHEN Jour = '2' THEN 'Mardi'
+        WHEN Jour = '3' THEN 'Mercredi'
+        WHEN Jour = '4' THEN 'Jeudi'
+        WHEN Jour = '5' THEN 'Vendredi'
+        WHEN Jour = '6' THEN 'Samedi'
+    END AS 'Jour de la semaine',
+    COUNT(trip_id) AS 'Nombre de courses',
+    "Heure de la journée"
+FROM jour_semaine
+GROUP BY "Jour de la semaine", "Heure de la journée"
+ORDER BY "Nombre de courses" DESC
+LIMIT 10;
+
+
+--------------------------------
+-- 6. ANALYSE OPÉRATIONNELLE
+--------------------------------
+
+/*
+Quels sont les créneaux Jour / Heure les plus demandés ?
+L'analyse croise le jour de la semaine et l'heure de la journée
+afin d'identifier les créneaux générant le plus de demandes.
+*/
+
+
+"Ajout de 3 analyses : performance, annulation et pics horaire"
