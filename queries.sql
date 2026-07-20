@@ -82,20 +82,48 @@ SELECT
     COUNT(*) AS "Nombre de courses"
 FROM trips
 GROUP BY strftime('%Y-%m', requested_at)
-ORDER BY strftime('%Y-%m', requested_at) ;
+ORDER BY strftime('%Y-%m', requested_at);
 
 /*
-Analyse des villes les plus fréquentées par les utilisateurs
-pour identifier les zones à fort potentiel de croissance et d'expansion.
+Analyse des villes les plus fréquentées pour identifier
+les zones à fort potentiel de croissance et d'expansion.
 */
 
 SELECT
     locations.city AS 'Ville',
-    COUNT(*) AS "Nombre de courses"
+    COUNT(*) AS "Nombre de courses",
+    SUM(total_fare) AS "Chiffre d'affaires"
 FROM trips
 JOIN locations ON trips.pickup_location_id = locations.location_id
 GROUP BY locations.city
-ORDER BY "Nombre de courses" DESC;
+ORDER BY "Chiffre d'affaires" DESC;
+
+-- Quels types de zones (commerciales, résidentielles ou transitaires) sont les plus performaants ?
+
+SELECT
+    city AS "Ville",
+    locations.zone_type AS 'Type de zone',
+    COUNT(*) AS "Nombre de courses",
+    SUM(total_fare) AS "Chiffre d'affaires"
+FROM trips
+JOIN locations ON trips.pickup_location_id = locations.location_id
+GROUP BY locations.city, locations.zone_type
+ORDER BY "Chiffre d'affaires" DESC;
+
+-- Quels types de zones présentent le plus de problèmes ?
+
+SELECT
+    locations.city,
+    ROUND(AVG(drivers.rating), 2) AS "Notes moyennes",
+    COUNT(cancellations.cancel_id) AS "Nombre total d'annulations"
+FROM cancellations
+JOIN trips ON cancellations.trip_id = trips.trip_id
+JOIN drivers ON trips.driver_id = drivers.driver_id
+JOIN locations ON trips.pickup_location_id = locations.location_id
+GROUP BY locations.city
+ORDER BY "Nombre total d'annulations" DESC;
+
+
 
 -- !!!!!!!!!!!!!!!!! ANALYSER LA QUALITÉ DU MARCHÉ (annulations par ville, notes des chauffeurs par ville...)
 
@@ -121,6 +149,14 @@ FROM cancellations
 GROUP BY reason, cancelled_by
 ORDER BY "Nombre d'annulations" DESC;
 
+-- Par qui les courses sont-elles plus souvent annulées ?
+
+SELECT
+    COUNT(*) "Nombre d'annulations",
+    cancelled_by AS "Auteur de l'annulation"
+FROM cancellations
+GROUP BY "Auteur de l'annulation"
+ORDER BY "Nombre d'annulations" DESC;
 
 -- Combien de chiffre d'affaires perd Uber à cause des annulations ?
 
@@ -269,5 +305,5 @@ JOIN trips_cte ON drivers.driver_id = trips_cte.driver_id
 JOIN cancellations ON trips.trip_id = cancellations.trip_id
 GROUP BY drivers.driver_id, users.name, total_courses
 ORDER BY "Taux d'annulation" DESC
-LIMIT 10;
+LIMIT 20;
 
