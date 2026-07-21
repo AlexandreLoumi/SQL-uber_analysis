@@ -90,15 +90,16 @@ FROM trips;
 
 -- Question : Comment le volume de courses évolue-t-il dans le temps ?
 -- Enjeu : détecter les tendances saisonnières et anticiper les pics de demande
--- Résultat clé : Mars et Janvier sont les mois les plus occupés avec + de 2,000 courses entre janvier 2022 et juin 2024
--- Septembre, décembre, août, juillet, novembre et octobre sont les mois les moins demandés (1,300 - 1,400 courses)
+-- Résultat clé : la demande est plutôt homogène, avec des petits pics en mars.
+-- L'activité n'augmente pas considérablement, mais en Novembre 2023 et janvier 2022,
+-- le nombre de courses augmente d'environ 8% par rapport aux autres mois.
 
 SELECT
-    strftime('%m', requested_at) AS "Mois",
+    strftime('%Y-%m', requested_at) AS "Mois",
     COUNT(*) AS "Nombre de courses"
 FROM trips
-GROUP BY strftime('%m', requested_at)
-ORDER BY "Nombre de courses" DESC;
+GROUP BY 1
+ORDER BY 1;
 
 -- Question : Quelles sont les villes les plus fréquentées ?
 -- Enjeu : identifier les zones à fort potentiel de croissance et d'expansion
@@ -199,11 +200,20 @@ GROUP BY cancelled_by
 ORDER BY "Taux d'annulation" DESC;
 
 
--- Quels types de courses les chauffeurs annulent-ils ?
+-- Question : Quels types de courses sont les plus souvent annulés par les chauffeurs ?
+-- Enjeu : identifier les types de courses qui génèrent le plus de refus côté chauffeur afin d'optimiser .
+-- Résultat clé : les chauffeurs ont annulé 499 courses longue distance à très haute valeur.
+-- Les chauffeurs ont tendance à annuler le plus souvent les longues distance.
 
-WITH trajet_cte AS (
+WITH driver_cancellations AS (
+    SELECT trip_id
+    FROM cancellations
+    WHERE cancelled_by = 'driver'
+),
+trajet_cte AS (
     SELECT
-        trip_id,
+        t.trip_id,
+
         CASE
             WHEN duration_mins < 5 THEN 'Trajet très court'
             WHEN duration_mins < 10 THEN 'Trajet court'
@@ -212,10 +222,10 @@ WITH trajet_cte AS (
         END AS type_duree,
 
         CASE
-            WHEN distance_km < 5 THEN 'Course express'
-            WHEN distance_km < 10 THEN 'Course courte'
-            WHEN distance_km < 15 THEN 'Course standard'
-            ELSE 'Course longue'
+            WHEN distance_km < 5 THEN 'Distance mini'
+            WHEN distance_km < 10 THEN 'Distance courte'
+            WHEN distance_km < 15 THEN 'Distance standard'
+            ELSE 'Distance longue'
         END AS type_distance,
 
         CASE
@@ -226,36 +236,54 @@ WITH trajet_cte AS (
         END AS type_prix,
         distance_km,
         total_fare
-    FROM trips
+
+    FROM trips t
+    JOIN driver_cancellations dc ON t.trip_id = dc.trip_id
 )
 SELECT
-    trajet_cte.type_duree AS "Durée du trajet",
-    trajet_cte.type_distance AS "Distance du trajet",
-    trajet_cte.type_prix AS "Catégorie de tarif",
+    type_duree AS "Durée du trajet",
+    type_distance AS "Distance du trajet",
+    type_prix AS "Catégorie de tarif",
     COUNT(*) AS "Nombre d'annulations"    
-FROM cancellations
-JOIN trajet_cte ON cancellations.trip_id = trajet_cte.trip_id
-WHERE cancelled_by = 'driver'
-GROUP BY type_duree, type_distance, type_prix
-ORDER BY "Nombre d'annulations" DESC;
+FROM trajet_cte
+GROUP BY 1, 2, 3
+ORDER BY 4 DESC;
 
 -- Question : Combien de chiffre d'affaires est perdu à cause des annulations ?
 -- Enjeu : chiffrer l'impact financier du problème pour justifier un plan d'action
--- Résultat clé : [à compléter après exécution]
+-- Résultat clé : la plateforme perd $108,201.55 de CA potentiel dû aux annulations.
+-- En tête : l'urgence personnelle ($15,139.51). Mais si l'on regroupe les 2 catégories
+-- liées à l'attente ("too long wait" et "waited too long"), leur impact cumulé 
+-- atteint $20,428.68, la première cause de CA perdu. Comprendre pourquoi les temps
+-- d'attente sont trop élevés (zones à forte demande, disponibilité des chauffeurs 
+-- insuffisante à certains créneaux ?) devrait être la priorité.
 
+WITH cancel_cte AS (
+    SELECT
+        cancellations.reason AS "Raison d'annulation",
+        SUM(trips.total_fare) AS ca_potentiel_perdu,
+        COUNT(*) AS "Nombre d'annulations",
+        ROUND(AVG(trips.total_fare), 2) AS "Montant moyen des courses annulées"
+    FROM cancellations
+    JOIN trips ON cancellations.trip_id = trips.trip_id
+    GROUP BY cancellations.reason
+)
 SELECT
-    cancellations.reason AS "Raison d'annulation",
-    SUM(trips.total_fare) AS "CA potentiel perdu",
-    COUNT(*) AS "Nombre d'annulations",
-    ROUND(AVG(trips.total_fare), 2) AS "Montant moyen des courses annulées"
-FROM cancellations
-JOIN trips ON cancellations.trip_id = trips.trip_id
-GROUP BY cancellations.reason
-ORDER BY "CA potentiel perdu" DESC;
+    "Raison d'annulation",
+    ca_potentiel_perdu AS "CA potentiel perdu",
+    "Nombre d'annulations",
+    "Montant moyen des courses annulées",
+    ROUND(SUM(ca_potentiel_perdu) OVER (ORDER BY ca_potentiel_perdu DESC), 2) AS "CA cumulé"
+FROM cancel_cte
+ORDER BY ca_potentiel_perdu DESC;
 
 -- Question : Quelles villes cumulent le plus d'annulations et les notes chauffeur les plus basses ?
 -- Enjeu : repérer les zones où la qualité de service se dégrade, en priorité pour un plan correctif
--- Résultat clé : [à compléter après exécution]
+-- Résultat clé : Houston et NYC cumulent le plus d'annulations (830 et 812), loin devant Chicago (664)
+-- et Los Angeles (660). Mais les notes moyennes sont stables dans les 4 villes (4.28 à 4.38). Il n'y
+-- a pas de lien entre la note du chauffeur et le volume d'annulations. Le problème à Houston et NYC
+-- n'est donc pas une question de qualité de service, mais plus probablement à un facteur opérationnel
+-- propre à ces villes (attente, disponibilité, densité de la demande) à creuser séparément.
 
 SELECT
     locations.city AS "Ville",
@@ -275,7 +303,13 @@ ORDER BY "Nombre total d'annulations" DESC;
 
 -- Question : Quelles catégories de trajets (par durée) sont les plus rentables au km et à la minute ?
 -- Enjeu : identifier les types de courses à privilégier dans la stratégie de pricing et de matching
--- Résultat clé : [à compléter après exécution]
+-- Résultat clé : les trajets courts sont nettement les plus rentables, aussi bien à la minute ($1.56)
+-- qu'au kilomètre ($2.48), soit environ 60% de plus qu'un trajet très long à la minute ($0.97).
+-- La rentabilité par minute décroît régulièrement avec la durée du trajet, ce qui suggère que le
+-- temps est mieux valorisé sur des courses courtes et fréquentes que sur des longs trajets.
+-- À noter que la rentabilité au km n'est pas parfaitement linéaire (les trajets très longs sont
+-- légèrement plus rentable au km que les trajets longs), ce qui mériterait d'être creusé :
+-- seuils tarifaires, trajets autoroutiers plus rapide qu'en ville... 
 
 WITH courses_quartile AS (
     SELECT
@@ -287,10 +321,10 @@ WITH courses_quartile AS (
 )
 SELECT
     CASE
-        WHEN quartile_duree = 1 THEN "Trajet court"
-        WHEN quartile_duree = 2 THEN "Trajet moyen"
-        WHEN quartile_duree = 3 THEN "Trajet long"
-        ELSE "Trajet très long"
+        WHEN quartile_duree = 1 THEN 'Trajet court'
+        WHEN quartile_duree = 2 THEN 'Trajet moyen'
+        WHEN quartile_duree = 3 THEN 'Trajet long'
+        ELSE 'Trajet très long'
     END AS "Catégorie durée",
     ROUND(SUM(total_fare) / SUM(duration_mins), 2) AS "CA par minute",
     ROUND(SUM(total_fare) / SUM(distance_km), 2) AS "CA par km",
@@ -307,7 +341,10 @@ GROUP BY quartile_duree;
 
 -- Question : Qui sont les 10 chauffeurs générant le plus de CA ?
 -- Enjeu : identifier les profils à fidéliser en priorité
--- Résultat clé : [à compléter après exécution]
+-- Résultat clé : George Gray génère le plus de CA ($4,265.13) sur 90 courses, suivi
+-- d'Andrew Morales ($3,889.12 en 85 courses) et Jeffrey Ramirez ($3,854.21 en 87 courses).
+-- Ce classement montre un lien logique entre volume de courses et CA généré : les écarts entre chauffeurs
+-- du top 10 restent modérés, ce qui suggère une performance relativement homogène.
 
 SELECT
     users.name AS "Chauffeur",
@@ -316,13 +353,16 @@ SELECT
 FROM trips
 JOIN drivers ON trips.driver_id = drivers.driver_id
 JOIN users ON drivers.user_id = users.user_id
-GROUP BY users.name
+GROUP BY users.user_id
 ORDER BY "Chiffre d'affaires total généré" DESC
 LIMIT 10;
 
+
 -- Question : Quels chauffeurs génèrent le plus de CA par heure travaillée ?
--- Enjeu : identifier les profils les plus efficaces, indépendamment du volume brut de courses
--- Résultat clé : [à compléter après exécution]
+-- Enjeu : identifier les profils les plus efficaces, indépendamment du volume de courses
+-- Résultat clé : Sarah Hall génère le + de revenus avec $88.85 par heure, suivie de Benjamin Carter,
+-- avec $87.17 par heure. Le top 10 s'étend jusqu'à $81.02 par heure. Le nombre de courses total
+-- n'affecte pas le revenus par heure.
 
 SELECT
     users.name AS "Chauffeur",
@@ -332,30 +372,38 @@ SELECT
 FROM trips
 JOIN drivers ON trips.driver_id = drivers.driver_id
 JOIN users ON drivers.user_id = users.user_id
-GROUP BY users.name
+GROUP BY users.user_id
 ORDER BY "CA par heure" DESC
 LIMIT 10;
 
 -- Question : Quels chauffeurs génèrent le moins de CA par heure travaillée ?
 -- Enjeu : repérer les profils à accompagner ou former pour améliorer leur rendement
--- Résultat clé : [à compléter après exécution]
+-- Résultat clé : les 10 chauffeurs les moins performants génèrent en moyenne $56.38/h
+-- soit 17.8% de moins que la moyenne globale des chauffeurs actifs ($68.57).
+-- L'écart va jusqu'à -23.4% pour la pire performeuse (Emma Gray, $52.52/h). Tous ont
+-- un volume suffisant (24 à 61 courses).
 
 SELECT
     users.name AS "Chauffeur",
-    ROUND((SUM(trips.total_fare) / SUM(trips.duration_mins)) * 60, 2) AS "CA par heure",
+    ROUND((SUM(trips.total_fare) / NULLIF(SUM(trips.duration_mins), 0)) * 60, 2) AS "CA par heure",
     COUNT(*) AS "Nombre de courses",
-    SUM(trips.total_fare) AS "CA total"
+    ROUND(SUM(trips.total_fare), 2) AS "CA total",
+    ROUND(AVG((SUM(trips.total_fare) / NULLIF(SUM(trips.duration_mins), 0)) * 60) OVER (), 2) AS "CA par heure moyen (global)"
 FROM trips
 JOIN drivers ON trips.driver_id = drivers.driver_id
 JOIN users ON drivers.user_id = users.user_id
-GROUP BY users.name
+WHERE trips.status = 'completed'
+GROUP BY users.user_id
+HAVING COUNT(*) >= 20
 ORDER BY "CA par heure" ASC
 LIMIT 10;
 
 -- Question : Quels chauffeurs contribuent le plus aux annulations, en proportion de leur activité ?
 -- Enjeu : distinguer un chauffeur qui annule beaucoup parce qu'il roule beaucoup d'un chauffeur
 -- réellement problématique, pour cibler les actions correctives (formation, avertissement)
--- Résultat clé : [à compléter après exécution]
+-- Résultat clé : le taux d'annulation du TOP 20 s'étale de 22.73% à 30.3%, sans décrochage isolé.
+-- Le volume de courses varie fortement (33 à 74), et les taux élevés touchent aussi bien les 
+-- petits volumes (Ryan Hall, 33 courses) que les gros (Susan Cook, 74 courses).
 
 WITH trips_cte AS (
     SELECT
@@ -366,14 +414,13 @@ WITH trips_cte AS (
 )
 SELECT
     users.name AS "Chauffeur",
-    total_courses AS "Nombre de courses",
+    COUNT(trips.trip_id) AS "Nombre de courses",
     COUNT(cancellations.cancel_id) AS "Nombre d'annulations",
-    ROUND(100.0 * COUNT(cancellations.cancel_id) / total_courses, 2) AS "Taux d'annulation"
+    ROUND(100.0 * COUNT(cancellations.cancel_id) / COUNT(trips.trip_id), 2) AS "Taux d'annulation"
 FROM trips
 JOIN drivers ON trips.driver_id = drivers.driver_id
 JOIN users ON drivers.user_id = users.user_id
-JOIN trips_cte ON drivers.driver_id = trips_cte.driver_id
-JOIN cancellations ON trips.trip_id = cancellations.trip_id
-GROUP BY drivers.driver_id, users.name, total_courses
-ORDER BY "Taux d'annulation" DESC
-LIMIT 20;
+LEFT JOIN cancellations ON trips.trip_id = cancellations.trip_id
+GROUP BY users.user_id
+HAVING COUNT(trips.trip_id) >= 10
+ORDER BY "Taux d'annulation" DESC;
