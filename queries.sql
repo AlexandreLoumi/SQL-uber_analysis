@@ -1,4 +1,16 @@
 --------------------------------
+-- 0. NETTOYAGE DES DONNÉES
+--------------------------------
+
+-- Problématique : je me suis rendu compte qu'il y avait un problème de format :
+-- "waited too long" et "too long wait" représente la même raison. Je les ai donc
+-- rassemblé sous une seule raison.
+
+UPDATE cancellations
+SET reason = 'too long wait'
+WHERE reason = 'waited too long'
+
+--------------------------------
 -- 1. EXPLORATION DES DONNÉES
 --------------------------------
 
@@ -250,11 +262,9 @@ GROUP BY 1, 2, 3
 ORDER BY 4 DESC;
 
 -- Question : Combien de chiffre d'affaires est perdu à cause des annulations ?
--- Enjeu : chiffrer l'impact financier du problème pour justifier un plan d'action
--- Résultat clé : la plateforme perd $108,201.55 de CA potentiel dû aux annulations.
--- En tête : l'urgence personnelle ($15,139.51). Mais si l'on regroupe les 2 catégories
--- liées à l'attente ("too long wait" et "waited too long"), leur impact cumulé 
--- atteint $20,428.68, la première cause de CA perdu. Comprendre pourquoi les temps
+-- Enjeu : chiffrer l'impact financier de chaque problème pour justifier un plan d'action
+-- Résultat clé : la plateforme perd $108,201.55 de CA potentiel total dû aux annulations.
+-- En tête : l'attente trop longue entraîne des annulations. Comprendre pourquoi les temps
 -- d'attente sont trop élevés (zones à forte demande, disponibilité des chauffeurs 
 -- insuffisante à certains créneaux ?) devrait être la priorité.
 

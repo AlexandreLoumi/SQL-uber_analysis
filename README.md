@@ -34,6 +34,12 @@ Le fichier `queries.sql` regroupe plusieurs analyses métier :
 - Calcul de différents indicateurs de performance
 
 
+## Quelques exemples de résultats
+
+## Analyse des annulations
+
+![Analyse des annulations](media/annulations.png)
+
 ## Optimisation
 
 Le fichier `indexes.sql` contient les index utilisés afin d'améliorer les performances des requêtes les plus coûteuses.
