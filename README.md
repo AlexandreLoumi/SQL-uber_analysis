@@ -38,7 +38,15 @@ Le fichier `queries.sql` regroupe plusieurs analyses métier :
 
 ## Analyse des annulations
 
+1. Analyser les annulations et le CA potentiel perdu, avec un cumul pour calculer le CA total perdu.
+![Requête d'analyse des annulations](media/requete_annulations.png)
 ![Analyse des annulations](media/annulations.png)
+
+
+2. Segmentation des courses par quartile de durée afin d'identifier la performance économique des différents types de trajets (CA/minute, CA/km, panier moyen), permettant une analyse plus stratégique de la rentabilité.
+
+![Requête d'analyse par quartiles](media/requete_quartiles.png)
+![Requête d'analyse par quartiles](media/quartiles.png)
 
 ## Optimisation
 
