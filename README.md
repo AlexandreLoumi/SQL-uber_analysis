@@ -39,6 +39,7 @@ Le fichier `queries.sql` regroupe plusieurs analyses métier :
 ## Analyse des annulations
 
 1. Analyser les annulations et le CA potentiel perdu, avec un cumul pour calculer le CA total perdu.
+
 ![Requête d'analyse des annulations](media/requete_annulations.png)
 ![Analyse des annulations](media/annulations.png)
 
@@ -51,6 +52,15 @@ Le fichier `queries.sql` regroupe plusieurs analyses métier :
 ## Optimisation
 
 Le fichier `indexes.sql` contient les index utilisés afin d'améliorer les performances des requêtes les plus coûteuses.
+
+
+## Conclusions principales
+
+Cette analyse met en évidence plusieurs leviers d'amélioration :
+- Los Angeles représente un marché de développement : 2ème ville par CA, alors qu'elle est 4ème en nombre de courses
+- Réduire les annulations aura un fort impact financier
+- Optimiser les temps d'attente / la disponibilité des chauffeurs permettrait de réduire les annulations ($20,000+ de CA)
+- Les types de trajets les plus rentables ont été désignés. Il faut accentuer la communication sur ces types pour maximiser les revenus. 
 
 
 ##  Utilisation
