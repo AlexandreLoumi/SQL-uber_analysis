@@ -63,6 +63,18 @@ Cette analyse met en évidence plusieurs leviers d'amélioration :
 - Les types de trajets les plus rentables ont été désignés. Il faut accentuer la communication sur ces types pour maximiser les revenus. 
 
 
+## Schéma de la base
+
+```bash
+riders
+trips
+drivers
+trips
+payments
+reviews
+cancellations
+```
+
 ##  Utilisation
 
 1. Cloner le dépôt :
